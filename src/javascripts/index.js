@@ -1,44 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    const userProfileJSON = localStorage.getItem('userProfile');
-    const activeTasksJSON = localStorage.getItem('activeTasks');
-    const completedTasksJSON = localStorage.getItem('completedTasks');
-    const activeTasksList = document.querySelector('#activeTasksList');
-    const overdueTasksList = document.querySelector('#overdueTasksList');
-    const completedTasksList = document.querySelector('#completedTasksList');
-
-    if (userProfileJSON) {
-        const userProfile = JSON.parse(userProfileJSON);
-    }
+    loadUserProfile();
+    loadTasks();
     
-    document.querySelector('#nameForm').textContent = userProfileJSON ? userProfile.Name : 'David Heinemeier Hansson (DHH)';
-    document.querySelector('#positionForm').textContent = userProfileJSON ? userProfile.Position : 'Chief Executive Officer';
-    document.querySelector('#avatar').src = userProfileJSON ? userProfile.profileSource : '../img/profile.jpg';
-
-    if (activeTasksJSON) {
-        const tasks = JSON.parse(activeTasksJSON);
-        tasks.forEach(t => {
-            const task = t.text
-            const dueDate = t.dueDate
-            const priority = t.priority
-            const checked = t.completed
-            const li = buildTaskList(task, dueDate, priority, checked);
-            isOverdue(dueDate) ? overdueTasksList.append(li) : activeTasksList.append(li);
-        });
-    }
-
-    if (completedTasksJSON) {
-        const tasks = JSON.parse(completedTasksJSON);
-        tasks.forEach(t => {
-            const task = t.text
-            const dueDate = t.dueDate
-            const priority = t.priority
-            const checked = t.completed
-            const li = buildTaskList(task, dueDate, priority, checked);
-            completedTasksList.append(li);
-        });
-    }
-
     const svgNS = 'http://www.w3.org/2000/svg';
     const saveEditSVG = document.createElementNS(svgNS, 'svg');
     saveEditSVG.setAttribute('xmlns', svgNS);
@@ -65,21 +29,89 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('#activeTasksBtn').addEventListener('click', () => taskView('activeTasks'));
     document.querySelector('#overdueTasksBtn').addEventListener('click', () => taskView('overdueTasks'));
     document.querySelector('#completedTasksBtn').addEventListener('click', () => taskView('completedTasks'));
-    document.querySelector('#activeTasksList').addEventListener('change', (event) => {
-        const taskEl = event.target.closest('li');
-        if (!taskEl) return;
-        completedTasksList.prepend(taskEl);
-        saveTasks('completedTasks', completedTasksList);
-    })
-    document.querySelector('#completedTasksList').addEventListener('change', (event) => {
-        const taskEl = event.target.closest('li');
-        if (!taskEl) return;
-        activeTasksList.prepend(li);
-        saveTasks('activeTasks', activeTasksList);
-    })
+    document.querySelector('#activeTasksList').addEventListener('change', (event) => markAsDone(event, 'active'));
+    document.querySelector('#overdueTasksList').addEventListener('change', (event) => markAsDone(event, 'active'));
+    document.querySelector('#completedTasksList').addEventListener('change', (event) => markAsDone(event, 'completed'));
+    document.querySelector('#task-lists').addEventListener('click', (event) => deleteTask(event));
 
     taskView('activeTasks');
 });
+
+function loadTasks () {
+
+    const activeTasksJSON = localStorage.getItem('activeTasks');
+    const completedTasksJSON = localStorage.getItem('completedTasks');
+    const activeTasksList = document.querySelector('#activeTasksList');
+    const overdueTasksList = document.querySelector('#overdueTasksList');
+    const completedTasksList = document.querySelector('#completedTasksList');
+
+    if (activeTasksJSON) {
+        const tasks = JSON.parse(activeTasksJSON);
+        tasks.forEach(t => {
+            const task = t.text
+            const dueDate = t.dueDate
+            const priority = t.priority
+            const checked = t.completed
+            const li = buildTaskList(task, dueDate, priority, checked);
+            isOverdue(dueDate) ? overdueTasksList.append(li) : activeTasksList.append(li);
+        });
+    }
+
+    if (completedTasksJSON) {
+        const tasks = JSON.parse(completedTasksJSON);
+        tasks.forEach(t => {
+            const task = t.text
+            const dueDate = t.dueDate
+            const priority = t.priority
+            const checked = t.completed
+            const li = buildTaskList(task, dueDate, priority, checked);
+            completedTasksList.append(li);
+        });
+    }
+}
+
+function loadUserProfile () {
+    
+    const userProfileJSON = localStorage.getItem('userProfile');
+    const userProfile = userProfileJSON ? JSON.parse(userProfileJSON) : [];
+    document.querySelector('#nameForm').textContent = userProfileJSON ? userProfile.Name : 'David Heinemeier Hansson (DHH)';
+    document.querySelector('#positionForm').textContent = userProfileJSON ? userProfile.Position : 'Chief Executive Officer';
+    document.querySelector('#avatar').src = userProfileJSON ? userProfile.profileSource : '../img/profile.jpg';
+
+}
+
+function markAsDone (event, taskType) {
+
+    const activeTasksList = document.querySelector('#activeTasksList');
+    const overdueTasksList = document.querySelector('#overdueTasksList');
+    const completedTasksList = document.querySelector('#completedTasksList');
+
+    const taskEl = event.target.closest('li');
+    if (!taskEl) return;
+    const overdue = isOverdue(taskEl.dataset.date);
+    const isActive = taskType === 'active';
+
+    // if from active/overdue page then move the element to done page
+    if (isActive) {
+        completedTasksList.prepend(taskEl);
+    } else if (!isActive && !overdue) {
+        activeTasksList.prepend(taskEl);
+    } else {
+        overdueTasksList.prepend(taskEl);
+    }
+
+    isActive ? saveCompletedTasks() : saveActiveTasks();
+}
+
+function deleteTask (event) {
+
+    const delBtn = event.target.closest('.delete-btn');
+    if (!delBtn) return;
+    const li = delBtn.closest('li');
+    const delSrcId = li.closest('ul').id;
+    li.remove();
+    delSrcId === 'completedTasksList' ? saveCompletedTasks() : saveActiveTasks();
+}
 
 function isOverdue (dueDate) {
     const today = new Date();
@@ -92,13 +124,30 @@ function isOverdue (dueDate) {
 
 function saveTasks (taskType, taskList) {
 
-    const tasks = Array.from(taskList.querySelectorAll('li')).map(li => ({
+    const tasks = taskList.map(li => ({
         text: li.querySelector('.task-name span').textContent,
         completed: li.querySelector('.task-name input').checked,
         dueDate: li.dataset.date,
         priority: li.querySelector('.task-details .priority-level').textContent
     }));
     localStorage.setItem(`${taskType}`, JSON.stringify(tasks));
+}
+
+function saveActiveTasks() {
+
+    const overdueTasksList = document.querySelector('#overdueTasksList');
+    const activeTasksList = document.querySelector('#activeTasksList');
+    const activeTasksArr = Array.from(activeTasksList.querySelectorAll('li'));
+    const overdueTasksArr = Array.from(overdueTasksList.querySelectorAll('li'));
+    const combinedArr = [...activeTasksArr, ...overdueTasksArr];
+    saveTasks('activeTasks', combinedArr);
+}
+
+function saveCompletedTasks() {
+
+    const completedTasksList = document.querySelector('#completedTasksList');
+    const completedTasksArr = Array.from(completedTasksList.querySelectorAll('li'));
+    saveTasks('completedTasks', completedTasksArr);
 }
 
 function saveProfile () {
@@ -139,10 +188,12 @@ function editName (saveEditSVG) {
     }
 }
 
+// TODO: FINISH THIS
 function editPosition (saveEditSVG) {
 
 }
 
+// TODO: FINISH THIS
 function editProfile (saveEditSVG) {
 
 }
@@ -156,14 +207,13 @@ function addTask (event) {
     const priority = document.querySelector('#priorityLevel').value;
 
     if (!task || !dueDate || !priority) return;
-    if (isOverdue(dueDate)) return;
-
+    
     const li = buildTaskList(task, dueDate, priority);
     
-    const activeTasksList = document.querySelector('#activeTasksList');
-    activeTasksList.append(li);
-    // saveTasks('activeTask', activeTasksList);
+    isOverdue(dueDate) ? document.querySelector('#overdueTasksList').append(li) : document.querySelector('#activeTasksList').append(li);
     
+    saveActiveTasks();
+
     document.querySelector('#addTask').reset();
 }
 
@@ -227,7 +277,6 @@ function buildTaskList (task, dueDate, priority, checked) {
         </div>
         `;
 
-    li.querySelector('.delete-btn').addEventListener('click', () => li.remove());
     return li;
 }
 
