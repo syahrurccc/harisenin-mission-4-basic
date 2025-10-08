@@ -2,29 +2,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadUserProfile();
     loadTasks();
-    
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const saveEditSVG = document.createElementNS(svgNS, 'svg');
-    saveEditSVG.setAttribute('xmlns', svgNS);
-    saveEditSVG.setAttribute('fill', 'none');
-    saveEditSVG.setAttribute('viewBox', '0 0 24 24');
-    saveEditSVG.setAttribute('stroke-width', '1.5');
-    saveEditSVG.setAttribute('stroke', 'white');
-    saveEditSVG.setAttribute('class', 'inline w-5 h-5 hover:stroke-blue-400 hover:cursor-pointer');
 
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    path.setAttribute(
-    'd',
-    'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
-    );
-
-    saveEditSVG.appendChild(path);
-
-    document.querySelector('#nameEditBtn').addEventListener('click', () => editName(saveEditSVG));
-    document.querySelector('#positionEditBtn').addEventListener('click', () => editPosition(saveEditSVG));
-    document.querySelector('#profileEditBtn').addEventListener('click', () => editProfile(saveEditSVG));
+    document.querySelector('#nameEditBtn').addEventListener('click', () => editName());
+    document.querySelector('#positionEditBtn').addEventListener('click', () => editPosition());
     document.querySelector('#addTask').addEventListener('submit', addTask);
     document.querySelector('#activeTasksBtn').addEventListener('click', () => taskView('activeTasks'));
     document.querySelector('#overdueTasksBtn').addEventListener('click', () => taskView('overdueTasks'));
@@ -33,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('#overdueTasksList').addEventListener('change', (event) => markAsDone(event, 'active'));
     document.querySelector('#completedTasksList').addEventListener('change', (event) => markAsDone(event, 'completed'));
     document.querySelector('#task-lists').addEventListener('click', (event) => deleteTask(event));
+    document.querySelector('#delete-all-btn').addEventListener('click', () => deleteAllTasks());
 
     taskView('activeTasks');
 });
@@ -74,10 +55,8 @@ function loadUserProfile () {
     
     const userProfileJSON = localStorage.getItem('userProfile');
     const userProfile = userProfileJSON ? JSON.parse(userProfileJSON) : [];
-    document.querySelector('#nameForm').textContent = userProfileJSON ? userProfile.Name : 'David Heinemeier Hansson (DHH)';
-    document.querySelector('#positionForm').textContent = userProfileJSON ? userProfile.Position : 'Chief Executive Officer';
-    document.querySelector('#avatar').src = userProfileJSON ? userProfile.profileSource : '../img/profile.jpg';
-
+    document.querySelector('#nameForm').textContent = userProfile.name ? userProfile.name : 'David Heinemeier Hansson';
+    document.querySelector('#positionForm').textContent = userProfile.position ? userProfile.position : 'Chief Executive Officer';
 }
 
 function markAsDone (event, taskType) {
@@ -113,7 +92,23 @@ function deleteTask (event) {
     delSrcId === 'completedTasksList' ? saveCompletedTasks() : saveActiveTasks();
 }
 
+function deleteAllTasks () {
+
+    const taskLists = document.querySelector('#task-lists');
+    const tasks = taskLists.querySelectorAll('li');
+
+    const confirmation = confirm('Are you sure? This action will delete all tasks including completed ones.');
+    if (confirmation) {
+        tasks.forEach(t => t.remove());
+        saveActiveTasks();
+        saveCompletedTasks();
+    } else {
+        return;
+    }
+}
+
 function isOverdue (dueDate) {
+    
     const today = new Date();
     const due = new Date(dueDate);
     today.setHours(0, 0, 0, 0);
@@ -153,14 +148,36 @@ function saveCompletedTasks() {
 function saveProfile () {
 
     const profile = {
-        img: document.querySelector('#avatar').src,
         name: document.querySelector('#nameForm').textContent,
-        Position: document.querySelector('#positionForm').textContent
+        position: document.querySelector('#positionForm').textContent
     }
     localStorage.setItem('userProfile', JSON.stringify(profile));
 }
 
-function editName (saveEditSVG) {
+function saveEditSVG () {
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const saveEditSVG = document.createElementNS(svgNS, 'svg');
+    saveEditSVG.setAttribute('xmlns', svgNS);
+    saveEditSVG.setAttribute('fill', 'none');
+    saveEditSVG.setAttribute('viewBox', '0 0 24 24');
+    saveEditSVG.setAttribute('stroke-width', '1.5');
+    saveEditSVG.setAttribute('stroke', 'white');
+    saveEditSVG.setAttribute('class', 'inline w-5 h-5 hover:stroke-blue-400 hover:cursor-pointer');
+
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute(
+    'd',
+    'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
+    );
+
+    saveEditSVG.appendChild(path);
+    return saveEditSVG;
+}
+
+function editName () {
     
     const nameEl = document.querySelector('#nameForm');
     const oldNameText = nameEl.textContent;
@@ -170,32 +187,50 @@ function editName (saveEditSVG) {
     nameInput.type = 'text';
     nameInput.classList = [
         'inline px-2 rounded-full bg-gray-700 text-white placeholder-gray-400', 
-        'focus:outline-none focus:ring-2 focus:ring-blue-500'
+        'focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1'
         ].join(' ');
     nameInput.value = oldNameText;
+    const saveBtn = saveEditSVG().cloneNode(true);
 
     nameEl.replaceWith(nameInput);
-    saveEditSVG.setAttribute('id', 'saveNameEdit');
-    editBtn.replaceWith(saveEditSVG);
-    const saveEditBtn = document.querySelector('#saveNameEdit');
+    editBtn.replaceWith(saveBtn);
 
-    saveEditBtn.onclick = () => {
+    saveBtn.onclick = () => {
         nameEl.textContent = nameInput.value;
         nameInput.replaceWith(nameEl);
+        saveBtn.replaceWith(editBtn);
 
-        saveEditBtn.replaceWith(editBtn);
+        saveProfile();
         editBtn.onclick = () => editName(saveEditSVG);
     }
 }
 
-// TODO: FINISH THIS
-function editPosition (saveEditSVG) {
+function editPosition () {
 
-}
+    const positionEl = document.querySelector('#positionForm');
+    const oldPositionText = positionEl.textContent;
+    const editBtn = document.querySelector('#positionEditBtn');
 
-// TODO: FINISH THIS
-function editProfile (saveEditSVG) {
+    const positionInput = document.createElement('input');
+    positionInput.type = 'text';
+    positionInput.classList = [
+        'inline px-2 rounded-full bg-gray-700 text-white placeholder-gray-400', 
+        'focus:outline-none focus:ring-2 focus:ring-blue-500 mt-1'
+        ].join(' ');
+    positionInput.value = oldPositionText;
+    const saveBtn = saveEditSVG().cloneNode(true);
 
+    positionEl.replaceWith(positionInput);
+    editBtn.replaceWith(saveBtn);
+
+    saveBtn.onclick = () => {
+        positionEl.textContent = positionInput.value;
+        positionInput.replaceWith(positionEl);
+        saveBtn.replaceWith(editBtn);
+
+        saveProfile();
+        editBtn.onclick = () => editName(saveEditSVG);
+    }
 }
 
 function addTask (event) {
