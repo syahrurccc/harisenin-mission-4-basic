@@ -1,30 +1,47 @@
 document.addEventListener('DOMContentLoaded', () => {
 
+    const qs = (el) => document.querySelector(el);
+    const { lists, buttons } = selectQuery(qs);
+
     loadUserProfile();
-    loadTasks();
+    loadTasks(lists.active, lists.overdue, lists.completed);
 
-    document.querySelector('#nameEditBtn').addEventListener('click', () => editName());
-    document.querySelector('#positionEditBtn').addEventListener('click', () => editPosition());
-    document.querySelector('#addTask').addEventListener('submit', addTask);
-    document.querySelector('#activeTasksBtn').addEventListener('click', () => taskView('activeTasks'));
-    document.querySelector('#overdueTasksBtn').addEventListener('click', () => taskView('overdueTasks'));
-    document.querySelector('#completedTasksBtn').addEventListener('click', () => taskView('completedTasks'));
-    document.querySelector('#activeTasksList').addEventListener('change', (event) => markAsDone(event, 'active'));
-    document.querySelector('#overdueTasksList').addEventListener('change', (event) => markAsDone(event, 'active'));
-    document.querySelector('#completedTasksList').addEventListener('change', (event) => markAsDone(event, 'completed'));
-    document.querySelector('#task-lists').addEventListener('click', (event) => deleteTask(event));
-    document.querySelector('#delete-all-btn').addEventListener('click', () => deleteAllTasks());
-
-    taskView('activeTasks');
+    qs('#nameEditBtn').addEventListener('click', () => editName());
+    qs('#positionEditBtn').addEventListener('click', () => editPosition());
+    qs('#addTask').addEventListener('submit', (event) => addTask(event, lists.active, lists.overdue));
+    qs('#task-lists').addEventListener('click', (event) => deleteTask(event, lists.active, lists.overdue, lists.completed));
+    qs('#delete-all-btn').addEventListener('click', () => deleteAllTasks(lists.active, lists.overdue, lists.completed));
+    Object.entries(buttons).forEach(([type, el]) => {
+        el.addEventListener('click', () => taskView(`${type}Tasks`, lists.active, lists.overdue, lists.completed));
+    });
+    Object.entries(lists).forEach(([type, el]) =>{
+        el.addEventListener('change', (e) => markAsDone(e, type, lists.active, lists.overdue, lists.completed));
+    });
+    
+    taskView('activeTasks', lists.active, lists.overdue, lists.completed);
 });
 
-function loadTasks () {
+function selectQuery (qs) {
+
+    const lists = {
+        active: qs('#activeTasksList'),
+        overdue: qs('#overdueTasksList'),
+        completed: qs('#completedTasksList')
+    }
+
+    const buttons = {
+        active: qs('#activeTasksBtn'),
+        overdue: qs('#overdueTasksBtn'),
+        completed: qs('#completedTasksBtn')
+    }
+
+    return { lists, buttons };
+}
+
+function loadTasks (activeTasksList, overdueTasksList, completedTasksList) {
 
     const activeTasksJSON = localStorage.getItem('activeTasks');
     const completedTasksJSON = localStorage.getItem('completedTasks');
-    const activeTasksList = document.querySelector('#activeTasksList');
-    const overdueTasksList = document.querySelector('#overdueTasksList');
-    const completedTasksList = document.querySelector('#completedTasksList');
 
     if (activeTasksJSON) {
         const tasks = JSON.parse(activeTasksJSON);
@@ -59,40 +76,40 @@ function loadUserProfile () {
     document.querySelector('#positionForm').textContent = userProfile.position ? userProfile.position : 'Chief Executive Officer';
 }
 
-function markAsDone (event, taskType) {
-
-    const activeTasksList = document.querySelector('#activeTasksList');
-    const overdueTasksList = document.querySelector('#overdueTasksList');
-    const completedTasksList = document.querySelector('#completedTasksList');
+function markAsDone (event, taskType, activeTasksList, overdueTasksList, completedTasksList) {
 
     const taskEl = event.target.closest('li');
     if (!taskEl) return;
     const overdue = isOverdue(taskEl.dataset.date);
-    const isActive = taskType === 'active';
+    const isCompleted = taskType === 'completed';
 
-    // if from active/overdue page then move the element to done page
-    if (isActive) {
-        completedTasksList.prepend(taskEl);
-    } else if (!isActive && !overdue) {
+    // if element came from completed page check the due date before returning
+    // else put tasks to completed when checked
+    if (isCompleted && !overdue) {
         activeTasksList.prepend(taskEl);
-    } else {
+    } else if (isCompleted && overdue) {
         overdueTasksList.prepend(taskEl);
+    } else {
+        completedTasksList.prepend(taskEl);
     }
 
-    isActive ? saveCompletedTasks() : saveActiveTasks();
+    saveActiveTasks(activeTasksList, overdueTasksList);
+    saveCompletedTasks(completedTasksList);
 }
 
-function deleteTask (event) {
+function deleteTask (event, activeTasksList, overdueTasksList, completedTasksList) {
 
     const delBtn = event.target.closest('.delete-btn');
     if (!delBtn) return;
     const li = delBtn.closest('li');
     const delSrcId = li.closest('ul').id;
     li.remove();
-    delSrcId === 'completedTasksList' ? saveCompletedTasks() : saveActiveTasks();
+    delSrcId === 'completedTasksList' 
+    ? saveCompletedTasks(completedTasksList) 
+    : saveActiveTasks(activeTasksList, overdueTasksList);
 }
 
-function deleteAllTasks () {
+function deleteAllTasks (activeTasksList, overdueTasksList, completedTasksList) {
 
     const taskLists = document.querySelector('#task-lists');
     const tasks = taskLists.querySelectorAll('li');
@@ -100,8 +117,8 @@ function deleteAllTasks () {
     const confirmation = confirm('Are you sure? This action will delete all tasks including completed ones.');
     if (confirmation) {
         tasks.forEach(t => t.remove());
-        saveActiveTasks();
-        saveCompletedTasks();
+        saveActiveTasks(activeTasksList, overdueTasksList);
+        saveCompletedTasks(completedTasksList);
     } else {
         return;
     }
@@ -128,19 +145,16 @@ function saveTasks (taskType, taskList) {
     localStorage.setItem(`${taskType}`, JSON.stringify(tasks));
 }
 
-function saveActiveTasks() {
+function saveActiveTasks(activeTasksList, overdueTasksList) {
 
-    const overdueTasksList = document.querySelector('#overdueTasksList');
-    const activeTasksList = document.querySelector('#activeTasksList');
     const activeTasksArr = Array.from(activeTasksList.querySelectorAll('li'));
     const overdueTasksArr = Array.from(overdueTasksList.querySelectorAll('li'));
     const combinedArr = [...activeTasksArr, ...overdueTasksArr];
     saveTasks('activeTasks', combinedArr);
 }
 
-function saveCompletedTasks() {
+function saveCompletedTasks(completedTasksList) {
 
-    const completedTasksList = document.querySelector('#completedTasksList');
     const completedTasksArr = Array.from(completedTasksList.querySelectorAll('li'));
     saveTasks('completedTasks', completedTasksArr);
 }
@@ -191,6 +205,7 @@ function editName () {
         ].join(' ');
     nameInput.value = oldNameText;
     const saveBtn = saveEditSVG().cloneNode(true);
+    saveBtn.id = 'save-name-edit';
 
     nameEl.replaceWith(nameInput);
     editBtn.replaceWith(saveBtn);
@@ -219,6 +234,7 @@ function editPosition () {
         ].join(' ');
     positionInput.value = oldPositionText;
     const saveBtn = saveEditSVG().cloneNode(true);
+    saveBtn.id = 'save-position-edit';
 
     positionEl.replaceWith(positionInput);
     editBtn.replaceWith(saveBtn);
@@ -229,11 +245,11 @@ function editPosition () {
         saveBtn.replaceWith(editBtn);
 
         saveProfile();
-        editBtn.onclick = () => editName(saveEditSVG);
+        editBtn.onclick = () => editPosition(saveEditSVG);
     }
 }
 
-function addTask (event) {
+function addTask (event, activeTasksList, overdueTasksList) {
 
     event.preventDefault();
 
@@ -245,9 +261,9 @@ function addTask (event) {
     
     const li = buildTaskList(task, dueDate, priority);
     
-    isOverdue(dueDate) ? document.querySelector('#overdueTasksList').append(li) : document.querySelector('#activeTasksList').append(li);
+    isOverdue(dueDate) ? overdueTasksList.append(li) : activeTasksList.append(li);
     
-    saveActiveTasks();
+    saveActiveTasks(activeTasksList, overdueTasksList);
 
     document.querySelector('#addTask').reset();
 }
@@ -315,11 +331,11 @@ function buildTaskList (task, dueDate, priority, checked) {
     return li;
 }
 
-function taskView (view) {
+function taskView (view, activeTasksList, overdueTasksList, completedTasksList) {
 
-    document.querySelector('#activeTasksList').style.display = 'none';
-    document.querySelector('#overdueTasksList').style.display = 'none';
-    document.querySelector('#completedTasksList').style.display = 'none';
+    activeTasksList.style.display = 'none';
+    overdueTasksList.style.display = 'none';
+    completedTasksList.style.display = 'none';
 
     document.querySelector(`#${view}List`).style.display = 'block';
 
