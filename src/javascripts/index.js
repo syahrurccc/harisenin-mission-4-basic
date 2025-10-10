@@ -1,27 +1,28 @@
+const qs = (el) => document.querySelector(el);
+
 document.addEventListener('DOMContentLoaded', () => {
 
-    const qs = (el) => document.querySelector(el);
-    const { lists, buttons } = selectQuery(qs);
+    const { lists, buttons } = selectQuery();
 
     loadUserProfile();
-    loadTasks(lists.active, lists.overdue, lists.completed);
+    loadTasks(lists);
 
     qs('#nameEditBtn').addEventListener('click', () => editName());
     qs('#positionEditBtn').addEventListener('click', () => editPosition());
-    qs('#addTask').addEventListener('submit', (event) => addTask(event, lists.active, lists.overdue));
-    qs('#task-lists').addEventListener('click', (event) => deleteTask(event, lists.active, lists.overdue, lists.completed));
-    qs('#delete-all-btn').addEventListener('click', () => deleteAllTasks(lists.active, lists.overdue, lists.completed));
+    qs('#addTask').addEventListener('submit', (event) => addTask(event, lists));
+    qs('#task-lists').addEventListener('click', (event) => deleteTask(event));
+    qs('#delete-all-btn').addEventListener('click', () => deleteAllTasks());
     Object.entries(buttons).forEach(([type, el]) => {
-        el.addEventListener('click', () => taskView(`${type}Tasks`, lists.active, lists.overdue, lists.completed));
+        el.addEventListener('click', () => taskView(`${type}Tasks`, lists, buttons));
     });
     Object.entries(lists).forEach(([type, el]) =>{
-        el.addEventListener('change', (e) => markAsDone(e, type, lists.active, lists.overdue, lists.completed));
+        el.addEventListener('change', (e) => markAsDone(e, type, lists));
     });
     
-    taskView('activeTasks', lists.active, lists.overdue, lists.completed);
+    taskView('activeTasks', lists, buttons);
 });
 
-function selectQuery (qs) {
+function selectQuery () {
 
     const lists = {
         active: qs('#activeTasksList'),
@@ -34,94 +35,8 @@ function selectQuery (qs) {
         overdue: qs('#overdueTasksBtn'),
         completed: qs('#completedTasksBtn')
     }
-
-    return { lists, buttons };
-}
-
-function loadTasks (activeTasksList, overdueTasksList, completedTasksList) {
-
-    const activeTasksJSON = localStorage.getItem('activeTasks');
-    const completedTasksJSON = localStorage.getItem('completedTasks');
-
-    if (activeTasksJSON) {
-        const tasks = JSON.parse(activeTasksJSON);
-        tasks.forEach(t => {
-            const task = t.text
-            const dueDate = t.dueDate
-            const priority = t.priority
-            const checked = t.completed
-            const li = buildTaskList(task, dueDate, priority, checked);
-            isOverdue(dueDate) ? overdueTasksList.append(li) : activeTasksList.append(li);
-        });
-    }
-
-    if (completedTasksJSON) {
-        const tasks = JSON.parse(completedTasksJSON);
-        tasks.forEach(t => {
-            const task = t.text
-            const dueDate = t.dueDate
-            const priority = t.priority
-            const checked = t.completed
-            const li = buildTaskList(task, dueDate, priority, checked);
-            completedTasksList.append(li);
-        });
-    }
-}
-
-function loadUserProfile () {
     
-    const userProfileJSON = localStorage.getItem('userProfile');
-    const userProfile = userProfileJSON ? JSON.parse(userProfileJSON) : [];
-    document.querySelector('#nameForm').textContent = userProfile.name ? userProfile.name : 'David Heinemeier Hansson';
-    document.querySelector('#positionForm').textContent = userProfile.position ? userProfile.position : 'Chief Executive Officer';
-}
-
-function markAsDone (event, taskType, activeTasksList, overdueTasksList, completedTasksList) {
-
-    const taskEl = event.target.closest('li');
-    if (!taskEl) return;
-    const overdue = isOverdue(taskEl.dataset.date);
-    const isCompleted = taskType === 'completed';
-
-    // if element came from completed page check the due date before returning
-    // else put tasks to completed when checked
-    if (isCompleted && !overdue) {
-        activeTasksList.prepend(taskEl);
-    } else if (isCompleted && overdue) {
-        overdueTasksList.prepend(taskEl);
-    } else {
-        completedTasksList.prepend(taskEl);
-    }
-
-    saveActiveTasks(activeTasksList, overdueTasksList);
-    saveCompletedTasks(completedTasksList);
-}
-
-function deleteTask (event, activeTasksList, overdueTasksList, completedTasksList) {
-
-    const delBtn = event.target.closest('.delete-btn');
-    if (!delBtn) return;
-    const li = delBtn.closest('li');
-    const delSrcId = li.closest('ul').id;
-    li.remove();
-    delSrcId === 'completedTasksList' 
-    ? saveCompletedTasks(completedTasksList) 
-    : saveActiveTasks(activeTasksList, overdueTasksList);
-}
-
-function deleteAllTasks (activeTasksList, overdueTasksList, completedTasksList) {
-
-    const taskLists = document.querySelector('#task-lists');
-    const tasks = taskLists.querySelectorAll('li');
-
-    const confirmation = confirm('Are you sure? This action will delete all tasks including completed ones.');
-    if (confirmation) {
-        tasks.forEach(t => t.remove());
-        saveActiveTasks(activeTasksList, overdueTasksList);
-        saveCompletedTasks(completedTasksList);
-    } else {
-        return;
-    }
+    return { lists, buttons };
 }
 
 function isOverdue (dueDate) {
@@ -134,138 +49,56 @@ function isOverdue (dueDate) {
     return due < today;
 }
 
-function saveTasks (taskType, taskList) {
+function loadTasks (lists) {
 
-    const tasks = taskList.map(li => ({
-        text: li.querySelector('.task-name span').textContent,
-        completed: li.querySelector('.task-name input').checked,
-        dueDate: li.dataset.date,
-        priority: li.querySelector('.task-details .priority-level').textContent
-    }));
-    localStorage.setItem(`${taskType}`, JSON.stringify(tasks));
-}
+    const tasksJSON = localStorage.getItem('tasks');
 
-function saveActiveTasks(activeTasksList, overdueTasksList) {
-
-    const activeTasksArr = Array.from(activeTasksList.querySelectorAll('li'));
-    const overdueTasksArr = Array.from(overdueTasksList.querySelectorAll('li'));
-    const combinedArr = [...activeTasksArr, ...overdueTasksArr];
-    saveTasks('activeTasks', combinedArr);
-}
-
-function saveCompletedTasks(completedTasksList) {
-
-    const completedTasksArr = Array.from(completedTasksList.querySelectorAll('li'));
-    saveTasks('completedTasks', completedTasksArr);
-}
-
-function saveProfile () {
-
-    const profile = {
-        name: document.querySelector('#nameForm').textContent,
-        position: document.querySelector('#positionForm').textContent
-    }
-    localStorage.setItem('userProfile', JSON.stringify(profile));
-}
-
-function saveEditSVG () {
-
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const saveEditSVG = document.createElementNS(svgNS, 'svg');
-    saveEditSVG.setAttribute('xmlns', svgNS);
-    saveEditSVG.setAttribute('fill', 'none');
-    saveEditSVG.setAttribute('viewBox', '0 0 24 24');
-    saveEditSVG.setAttribute('stroke-width', '1.5');
-    saveEditSVG.setAttribute('stroke', 'white');
-    saveEditSVG.setAttribute('class', 'inline w-5 h-5 hover:stroke-blue-400 hover:cursor-pointer');
-
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    path.setAttribute(
-    'd',
-    'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
-    );
-
-    saveEditSVG.appendChild(path);
-    return saveEditSVG;
-}
-
-function editName () {
-    
-    const nameEl = document.querySelector('#nameForm');
-    const oldNameText = nameEl.textContent;
-    const editBtn = document.querySelector('#nameEditBtn');
-
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.classList = [
-        'inline px-2 rounded-full bg-gray-700 text-white placeholder-gray-400', 
-        'focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1'
-        ].join(' ');
-    nameInput.value = oldNameText;
-    const saveBtn = saveEditSVG().cloneNode(true);
-    saveBtn.id = 'save-name-edit';
-
-    nameEl.replaceWith(nameInput);
-    editBtn.replaceWith(saveBtn);
-
-    saveBtn.onclick = () => {
-        nameEl.textContent = nameInput.value;
-        nameInput.replaceWith(nameEl);
-        saveBtn.replaceWith(editBtn);
-
-        saveProfile();
-        editBtn.onclick = () => editName(saveEditSVG);
+    if (tasksJSON) {
+        const tasks = JSON.parse(tasksJSON);
+        tasks.forEach(t => {
+            const task = t.text
+            const dueDate = t.dueDate
+            const priority = t.priority
+            const checked = t.completed
+            const li = buildTaskList(task, dueDate, priority, checked);
+            checked ? 
+            lists.completed.append(li) 
+            : isOverdue(dueDate) 
+            ? lists.overdue.append(li) : lists.active.append(li);
+        });
     }
 }
 
-function editPosition () {
-
-    const positionEl = document.querySelector('#positionForm');
-    const oldPositionText = positionEl.textContent;
-    const editBtn = document.querySelector('#positionEditBtn');
-
-    const positionInput = document.createElement('input');
-    positionInput.type = 'text';
-    positionInput.classList = [
-        'inline px-2 rounded-full bg-gray-700 text-white placeholder-gray-400', 
-        'focus:outline-none focus:ring-2 focus:ring-blue-500 mt-1'
-        ].join(' ');
-    positionInput.value = oldPositionText;
-    const saveBtn = saveEditSVG().cloneNode(true);
-    saveBtn.id = 'save-position-edit';
-
-    positionEl.replaceWith(positionInput);
-    editBtn.replaceWith(saveBtn);
-
-    saveBtn.onclick = () => {
-        positionEl.textContent = positionInput.value;
-        positionInput.replaceWith(positionEl);
-        saveBtn.replaceWith(editBtn);
-
-        saveProfile();
-        editBtn.onclick = () => editPosition(saveEditSVG);
-    }
+function loadUserProfile () {
+    
+    const userProfileJSON = localStorage.getItem('userProfile');
+    const userProfile = userProfileJSON ? JSON.parse(userProfileJSON) : [];
+    qs('#nameForm').textContent = userProfile.name ? userProfile.name : 'David Heinemeier Hansson';
+    qs('#positionForm').textContent = userProfile.position ? userProfile.position : 'Chief Executive Officer';
 }
 
-function addTask (event, activeTasksList, overdueTasksList) {
+function taskView (view, lists, buttons) {
 
-    event.preventDefault();
+    lists.active.style.display = 'none';
+    lists.overdue.style.display = 'none';
+    lists.completed.style.display = 'none';
 
-    const task = document.querySelector('#taskName').value;
-    const dueDate = document.querySelector('#dueDate').value;
-    const priority = document.querySelector('#priorityLevel').value;
+    qs(`#${view}List`).style.display = 'block';
 
-    if (!task || !dueDate || !priority) return;
-    
-    const li = buildTaskList(task, dueDate, priority);
-    
-    isOverdue(dueDate) ? overdueTasksList.append(li) : activeTasksList.append(li);
-    
-    saveActiveTasks(activeTasksList, overdueTasksList);
-
-    document.querySelector('#addTask').reset();
+    Object.entries(buttons).forEach(([_, btn]) => {
+        if (btn.id === `${view}Btn`) {
+            btn.classList = [
+                'flex-1 px-4 py-1 rounded-full border-2 border-white bg-white', 
+                'text-black font-bold hover:cursor-pointer text-center'
+                ].join(' ');
+        } else {
+            btn.classList = [
+                'flex-1 px-4 py-1 rounded-full border-2 border-white text-white',
+                'font-bold hover:bg-white hover:text-black hover:cursor-pointer',
+                'transition-colors duration-200 text-center'
+                ].join(' ');
+        }
+    })
 }
 
 function buildTaskList (task, dueDate, priority, checked) {
@@ -293,12 +126,12 @@ function buildTaskList (task, dueDate, priority, checked) {
     li.innerHTML = `
         <div class="task-name flex items-center gap-3 min-w-0">
             <input type="checkbox"
-            class="peer size-4 shrink-0 rounded-md border border-gray-500/50 bg-gray-800
+            class="peer size-3 shrink-0 rounded-md border border-gray-500/50 bg-gray-800
                 checked:bg-blue-600 checked:border-blue-600 hover:cursor-pointer
                 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 ${checked ? 'checked' : ''} 
             />
-            <span class="text-white text-lg truncate peer-checked:text-white/50 peer-checked:line-through">
+            <span class="text-white text-base truncate peer-checked:text-white/50 peer-checked:line-through">
             ${task}
             </span>
         </div>
@@ -331,28 +164,175 @@ function buildTaskList (task, dueDate, priority, checked) {
     return li;
 }
 
-function taskView (view, activeTasksList, overdueTasksList, completedTasksList) {
+function addTask (event, lists) {
 
-    activeTasksList.style.display = 'none';
-    overdueTasksList.style.display = 'none';
-    completedTasksList.style.display = 'none';
+    event.preventDefault();
 
-    document.querySelector(`#${view}List`).style.display = 'block';
+    const task = qs('#taskName').value;
+    const dueDate = qs('#dueDate').value;
+    const priority = qs('#priorityLevel').value;
 
-    const buttons = document.querySelectorAll('#viewTasksBtn button');
+    if (!task || !dueDate || !priority) return;
+    
+    const li = buildTaskList(task, dueDate, priority);
+    
+    isOverdue(dueDate) ? lists.overdue.append(li) : lists.active.append(li);
+    
+    saveTasks();
 
-    buttons.forEach((btn) => {
-        if (btn.id === `${view}Btn`) {
-            btn.classList = [
-                'flex-1 px-4 py-1 rounded-full border-2 border-white bg-white', 
-                'text-black font-bold hover:cursor-pointer text-center'
-                ].join(' ');
-        } else {
-            btn.classList = [
-                'flex-1 px-4 py-1 rounded-full border-2 border-white text-white',
-                'font-bold hover:bg-white hover:text-black hover:cursor-pointer',
-                'transition-colors duration-200 text-center'
-                ].join(' ');
-        }
-    })
+    qs('#addTask').reset();
 }
+
+function markAsDone (event, taskType, lists) {
+
+    const taskEl = event.target.closest('li');
+    if (!taskEl) return;
+    const overdue = isOverdue(taskEl.dataset.date);
+    const isCompleted = taskType === 'completed';
+
+    // if element came from completed page check the due date before returning
+    // else put tasks to completed when checked
+    if (isCompleted && !overdue) {
+        lists.active.append(taskEl);
+    } else if (isCompleted && overdue) {
+        lists.overdue.append(taskEl);
+    } else {
+        lists.completed.append(taskEl);
+    }
+
+    saveTasks();
+}
+
+function deleteTask (event) {
+
+    const delBtn = event.target.closest('.delete-btn');
+    if (!delBtn) return;
+    const li = delBtn.closest('li');
+    li.remove();
+    saveTasks();
+}
+
+function deleteAllTasks () {
+
+    const taskLists = qs('#task-lists');
+    const tasks = taskLists.querySelectorAll('li');
+
+    const confirmation = confirm('Are you sure? This action will delete all tasks including completed ones.');
+    if (confirmation) {
+        tasks.forEach(t => t.remove());
+        saveTasks();
+    } else {
+        return;
+    }
+}
+
+function saveTasks () {
+
+    const { lists,_ } = selectQuery();
+
+    const activeTasksArr = Array.from(lists.active.querySelectorAll('li'));
+    const overdueTasksArr = Array.from(lists.overdue.querySelectorAll('li'));
+    const completedTasksArr = Array.from(lists.completed.querySelectorAll('li'));
+    const taskList = [...activeTasksArr, ...overdueTasksArr, ...completedTasksArr];
+
+    const tasks = taskList.map(li => ({
+        text: li.querySelector('.task-name span').textContent,
+        completed: li.querySelector('.task-name input').checked,
+        dueDate: li.dataset.date,
+        priority: li.querySelector('.task-details .priority-level').textContent
+    }));
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+}
+
+function saveProfile () {
+
+    const profile = {
+        name: qs('#nameForm').textContent,
+        position: qs('#positionForm').textContent
+    }
+    localStorage.setItem('userProfile', JSON.stringify(profile));
+}
+
+function saveEditSVG () {
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const saveEditSVG = document.createElementNS(svgNS, 'svg');
+    saveEditSVG.setAttribute('xmlns', svgNS);
+    saveEditSVG.setAttribute('fill', 'none');
+    saveEditSVG.setAttribute('viewBox', '0 0 24 24');
+    saveEditSVG.setAttribute('stroke-width', '1.5');
+    saveEditSVG.setAttribute('stroke', 'white');
+    saveEditSVG.setAttribute('class', 'inline w-5 h-5 hover:stroke-blue-400 hover:cursor-pointer');
+
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute(
+    'd',
+    'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
+    );
+
+    saveEditSVG.appendChild(path);
+    return saveEditSVG;
+}
+
+function editName () {
+    
+    const nameEl = qs('#nameForm');
+    const oldNameText = nameEl.textContent;
+    const editBtn = qs('#nameEditBtn');
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.classList = [
+        'inline px-2 rounded-full bg-gray-700 text-white placeholder-gray-400', 
+        'focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1'
+        ].join(' ');
+    nameInput.value = oldNameText;
+    const saveBtn = saveEditSVG().cloneNode(true);
+    saveBtn.id = 'save-name-edit';
+
+    nameEl.replaceWith(nameInput);
+    editBtn.replaceWith(saveBtn);
+
+    saveBtn.onclick = () => {
+        nameEl.textContent = nameInput.value;
+        nameInput.replaceWith(nameEl);
+        saveBtn.replaceWith(editBtn);
+
+        saveProfile();
+        editBtn.onclick = () => editName(saveEditSVG);
+    }
+}
+
+function editPosition () {
+
+    const positionEl = qs('#positionForm');
+    const oldPositionText = positionEl.textContent;
+    const editBtn = qs('#positionEditBtn');
+
+    const positionInput = document.createElement('input');
+    positionInput.type = 'text';
+    positionInput.classList = [
+        'inline px-2 rounded-full bg-gray-700 text-white placeholder-gray-400', 
+        'focus:outline-none focus:ring-2 focus:ring-blue-500 mt-1'
+        ].join(' ');
+    positionInput.value = oldPositionText;
+    const saveBtn = saveEditSVG().cloneNode(true);
+    saveBtn.id = 'save-position-edit';
+
+    positionEl.replaceWith(positionInput);
+    editBtn.replaceWith(saveBtn);
+
+    saveBtn.onclick = () => {
+        positionEl.textContent = positionInput.value;
+        positionInput.replaceWith(positionEl);
+        saveBtn.replaceWith(editBtn);
+
+        saveProfile();
+        editBtn.onclick = () => editPosition(saveEditSVG);
+    }
+}
+
+
+
