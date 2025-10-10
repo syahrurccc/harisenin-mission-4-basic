@@ -333,6 +333,3 @@ function editPosition () {
         editBtn.onclick = () => editPosition(saveEditSVG);
     }
 }
-
-
-
